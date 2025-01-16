@@ -1,0 +1,40 @@
+// imports are just constant declarations
+const core = #import("core");
+
+// functions are also just constant declarations
+const main = fn() !void {
+  // we can use regular printing
+  core#print("Hello world!\n", .{});
+
+  // or we can use the postfix syntax
+  "Hello world, part 2!\n".core#print(.{});
+
+  // we can utilize the postfix syntax to do some really nice data processing
+  let data = "Hello world lorem ipsum";
+  data.core#str#split(" ")
+    .to_upper(allocator)
+    .core#iter#for_each(fn(item: []u8) void {
+      core#print("item: %s", .{item});
+    });
+};
+
+// this can be chained in postfix syntax
+const to_upper = fn(data: [][]u8, allocator: core#Allocator) [][]u8 {
+  // pull out the array list namespace, as we use it a few times in this function
+  const array_list = core#array_list;
+
+  // initialize the array list and defer the deinitialization (this doesn't
+  // actually work, since the data will be deallocated before it is returned,
+  // but i haven't invented the syntax to fix that yet, this is just for
+  // demonstration purposes)
+  let mut out = array_list#init([]u8, allocator);
+  defer out.array_list#deinit();
+
+  // iterate data and put into result thing
+  for item in data {
+    out.array_list#push(item.core#str#to_upper());
+  }
+
+  // return the slice
+  return out.view;
+};

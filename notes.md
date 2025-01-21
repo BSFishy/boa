@@ -28,6 +28,32 @@ data
 need to figure out if accessing struct fields should use the `#` syntax or if
 it should be the `.` syntax.
 
+alternatively, the `#` symbol could designate postfix, and `.` could be access.
+so a code example for this could look like the following:
+
+```text
+data
+  #namespace1.function1(data.field)
+  #.builtin()
+  #namespace2.function2()
+```
+
+the equivalent other syntax would be the following:
+
+```text
+data
+  .namespace1#function1(data#field)
+  .#builtin()
+  .namespace2#function2()
+```
+
+i think i like this one ^ more. a big thing is that having a universal postfix
+and access syntax will make lexing and parsing WAY easier. and i think the `.`
+as postfix and `#` as access looks better than vice versa. the field access is
+just a little caveat of that, but i think it looks fine. keeping these syntaxes
+simple and consistent will make the compiler and tooling way easier to build and
+work with, and should make the language easier to learn.
+
 ## top-level structures
 
 i'm still working through how i want this. i like the way zig does it, where

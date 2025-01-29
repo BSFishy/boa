@@ -36,5 +36,5 @@ const to_upper = fn(data: [][]u8, allocator: core#Allocator) [][]u8 {
   }
 
   // return the slice
-  return out.view;
+  return out#view;
 };

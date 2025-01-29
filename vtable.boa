@@ -1,0 +1,54 @@
+const core = #import("core");
+
+// a virtual table is just a struct with pointers to functions
+const VTable = struct {
+  // need to think about this self pointer more. i don't think metaprogramming the
+  // type here would be right since that would still only work for a specific type
+  // right? not sure, regardless, this should work by coercing the type arguments
+  // of any type to void. maybe add a sort of anyopaque like zig?
+  print: fn(self: *void) void,
+
+  // this requires a mutable self, since the pointer is mutable
+  update: fn(self: *mut void, value: []u8) void,
+};
+
+// simple dog structure that has a vtable
+const Dog = struct {
+  name: []u8,
+};
+
+// print out the dog
+const dog_print = fn(self: *Dog) void {
+  core#print("{s} barked!\n", .{self#name});
+};
+
+// update the dog's name
+const dog_update = fn(self: *mut Dog, name: []u8) void {
+  self#name = name;
+};
+
+// create a dog virtual table. this should lower the function arguments to fit into
+// the vtable struct type.
+const DogTable = VTable {
+  .print = dog_print,
+  .update = dog_update,
+};
+
+// do work on some data and its associated virtual table
+const do_work = fn(data: *mut void, vtable: *VTable) void {
+  // we can update the data since we take in a mutable pointer
+  data.vtable#update("Fido");
+
+  // print the data
+  data.vtable#print();
+};
+
+const main = fn() !void {
+  // create the doggy otto
+  let mut dog = Dog {
+    .name = "Otto",
+  };
+
+  // will print "Fido barked!"
+  do_work(dog, DogTable);
+};

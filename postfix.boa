@@ -1,0 +1,27 @@
+const core = #import("core");
+
+// structs are const variable declarations just like everything else
+const Dog = struct {
+  // not sure if this should be able to be explicitly marked as mutable or immutable.
+  // maybe not since if i have a mutable dog, i should be able to write this memory?
+  // or maybe since this is a view so the pointer should be mutable or not? regardless,
+  // this is meant to be immutable.
+  name: []u8
+};
+
+// regular function, where the first parameter can be postfix chained. `self` isn't a
+// keyword since the language itself doesnt have any understanding of hierarchy.
+const bark = fn(self: *Dog) void {
+  // still undecided about the print syntax
+  core#print("{s} barked\n", .{self#name});
+};
+
+const main = fn() !void {
+  // create a structure as you would expect
+  let dog = Dog {
+    .name = "Otto",
+  };
+
+  // we can postfix really clean :)
+  dog.bark();
+};

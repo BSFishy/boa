@@ -7,6 +7,29 @@ i feel like a big thing driving the design of the language is decoupling
 functionality and data, but still allowing for a relationship between data and
 functionality.
 
+## language northstars
+
+the main hypothesis of the language is that through language simplicity and
+consistency, the cognitive load required to maintain context of the language
+will be substantially decreased, allowing more mental capacity to be used on the
+actual problem at hand.
+
+for example, rust's type system is very difficult. even by just understanding
+the lifetime system and borrow checker, one still isnt even close to mastering
+the language. there are still concepts like pinning, arcing, etc. i DO NOT want
+that.
+
+the northstars are:
+
+1. **simplicity** - only the features are required should be implemented. the
+   language itself should only implement what is required to generate the
+   machine code. the standard library should only implement what is required to
+   perform basic operations with the language. vendor libraries can implement
+   whatever lol
+1. **consistency** - the features of the language should be consistent. there
+   shouldn't be any obvious or niche footguns or exceptions to the rules of the
+   language.
+
 ## postfix/paths
 
 in boa, paths are separated with `#`. since they aren't separated by `.`,
@@ -227,3 +250,96 @@ visibility, it should be simple enough to implement hard visibility in the
 compiler later if i feel like soft doesnt work well. similar vice versa, except
 if i implement hard visibility first, removing it will not be a breaking change
 in the language. probably going to go with that.
+
+## multi tasking
+
+this is a doosy so strap in. i really like the threading model of go, and would
+like to include a system like that in boa. however, the whole idea is to not
+take control away from the user of the language. from a standard library
+perspective, system threads should be exposed. anyone wanting to use system
+threads directly should have clear and easy access to do so.
+
+however, one of the reference vendor libraries should be a fibers module. this
+should give a coroutine experience, where each separate task is just a function.
+these can be configured to use cooperative or preemptive scheduling or a mixture
+of the two to offer different approaches to the threading. of course, as with
+everything, the defaults should work for 95% of projects, but give escape
+hatches where users will want them.
+
+each fiber gets its own stack. this is the main overhead of the whole system. if
+we allocate a ~2k stack for each fiber, that will result in ~2GB being used as
+stack space for 1 million fibers. tbh, not terrible but also no great. to
+partially remedy this, we can dynamically expand, use pools to allocate stacks,
+and use memory-mapped stacks to help ease up on memory usage. this is the
+primary drawback of using fibers, but the benefits severely outweigh the
+problems.
+
+with a fiber-based approach, we get some nice benefits that align with the
+philosophy of the language. the implementation should be relatively easy. the
+primary start mechanism of the fiber system should be plain function calls. this
+should keep the stack clean and easy to debug. it won't require any special
+implementation on the compiler's end or any crazy stuff in the language runtime.
+the entire implementation should exist in userland, implemented in plain boa, as
+a library.
+
+fibers should essentially be implemented as green threads. the fiber runtime
+should be started as a regular function call, which should spin up a number of
+system threads (probably the number of logical cores the cpu has), then run a
+scheduler that is work stealing and fair.
+
+we should also be able to maintain stack traces to an extent. at the callsite of
+a fiber spawn, we should be able to snatch the current stacktrace and pin it to
+the metadata of the fiber. this should help a great deal with debugging, as
+stack traces will be preserved, so call traces will remain clear and easy to
+locate.
+
+preemption is another feature that should be pretty nice. cooperative
+multitasking is great when each task is fair about the time it spends, but it is
+waaaaayyyyy easier to write code that isnt fair, than code that is. preemption
+is the primary way to get around this, and what i would expect many people to
+prefer instead of going about making sure all their code is fair. goroutines use
+userland preemption, so how hard could it be xD
+
+it is important to me that fibers do not create function coloring. the great
+thing about goroutines is that everything is just a function. no defining it as
+async or whatever. this is extremely important for refactoring sake and also
+simplicity from the user's perspective.
+
+blocking os tasks like file reading should also yield if possible. pretty much
+anything that may block the current thread should yield i think. we'll need to
+check if this can be done in a very efficient way. i dont want to be doing a
+bunch of checks on every syscall for if this current context is in a fiber, then
+trying to yield and all that. like if we can implement preemption through
+interrupts or something like that, try to do the interrupt. idk, but it should
+be pretty efficient while still allowing extensibility.
+
+another point is that maybe this would be a good opportunity to be able to do
+metaprogramming so that i can spawn a fiber with similar syntax to a goroutine.
+like if i could spawn a fiber like `my_func(data1, data2).fibers#spawn(rt)` and
+that would package the call into a closure, capture the current stack, etc. and
+perform the underlying call with all that data.
+
+overall, the implementation should be relatively simple, live entirely in
+userland, and offer many points of configuration and tuning. it should also be
+fairly lightweight and scalable.
+
+## metaprogramming
+
+i really love zig's metaprogramming. all a single language, no additional
+context, and the ability to build some super incredible apis. i am 100% about
+implementing that type of metaprogramming and lazy type checking.
+
+the type of metaprogramming i am still iffy about is the full fat you can
+implement a dsl in the language type of metaprogramming. something like you can
+do i jai or i think ruby. the real big thing about that is that it will decrease
+both northstars. the language will become less consistent, as anyone can write
+any syntax they want - if they want to do access with a period, they could write
+that. additionally, it will decrease the simplicity of the language by enabling
+more complexity through custom dsls.
+
+i still need to learn a lot more about all that metaprogramming, but right now
+im still on the fence on full fat metaprogramming. some of the features that i
+want to implement could benefit from all that, but also maybe there are other
+approaches that im not thinking of that could give me the same sort of
+functionality. additionally, maybe there are ways that i could lock down the
+metaprogramming to make sure it doesnt compromise on simplicity and consistency?

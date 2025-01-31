@@ -30,6 +30,19 @@ the northstars are:
    shouldn't be any obvious or niche footguns or exceptions to the rules of the
    language.
 
+the main idea of this approach is to keep control in the hands of the users of
+the language. instead of building features into the language or the compiler,
+features should be deferred to userland as much as possible. for example, struct
+packing _could_ be a compiler feature, but it would be **much** more powerful to
+have it implemented in userland as that would enable users to build their own
+packing algorithms or even build out other struct re-ordering systems.
+
+by doing this, the language and the compiler should never get in the way of the
+user. the user should always have the option of just writing code to do what
+they want to do. this will be of additional benefit to the compiler engineers
+and language designers, because it will force the language to be simple and, as a
+consequence, the compiler as well.
+
 ## postfix/paths
 
 in boa, paths are separated with `#`. since they aren't separated by `.`,
@@ -343,3 +356,82 @@ want to implement could benefit from all that, but also maybe there are other
 approaches that im not thinking of that could give me the same sort of
 functionality. additionally, maybe there are ways that i could lock down the
 metaprogramming to make sure it doesnt compromise on simplicity and consistency?
+
+### jan 31, 2025
+
+coming back to this, im wondering if function calls should be the only form of
+full metaprogramming? for example, maybe i could write this for spawing a fiber:
+
+```text
+my_fiber(data).fibers#spawn(rt);
+```
+
+and that `fibers#spawn` function would be a function, like any other:
+
+```text
+const spawn = fn(e: expr, rt: Runtime) expr {
+  // ...
+};
+```
+
+where `expr` is a special type, like the `type` datatype, that represents an
+expression in the code. i feel like this would be kinda like jai
+metaprogramming, but ill need to read more about that. the idea is that i can
+write some code, and whenever a function deals with `expr`, it must be run at
+compile time. the `expr` is a structure provided directly by the compiler,
+representing the expression it is being called with. i am unsure if this should
+be a token stream or some other structure, still working through that.
+
+but, this would allow effectively rewriting code like macros, if i go with a
+token stream. if i go with something more structured, it could provide even more
+data to the function, which could generate more complex code out the back end. i
+dont know, need to think more about all this stuff.
+
+#### later
+
+i'm coming more around to the idea of having a function that can take in an
+expression and return an expression. that will require the notion of having
+`const` functions, but that's fine. `expr` can only exist on a const function.
+it should also work fine for postfix syntax, since the postfix notation will
+just generate function call expressions where the first parameter is the
+preceding expression.
+
+i think also allowing anything as a parameter and returning an expression should
+be pretty good. that should allow for more interesting dsls where the logic is
+still explicitly a function call.
+
+## type inference
+
+so one thing i am realizing is type inference is going to need to be a thing.
+since functions can't have associated functions, we need to be able to infer
+types from type parameters. as an example:
+
+```text
+// in module array_list
+
+const ArrayList = fn(T: type) type {
+  return struct {
+    .items = []T,
+  };
+};
+
+const append = fn(self: *ArrayList(infer T), item: T) void {
+  // ...
+};
+```
+
+i don't think this should be too hard. the type coming into that function must
+always be concrete. additionally, a struct constructed manually will not be
+equivalent to the struct created in the `ArrayList` function. with this, the
+type system should be able to infer that type for usage within the function
+definition as well as in the function implementation.
+
+we also shouldnt need to worry about type constraint. again, the type passed
+into a function _must_ be a concrete type. in other words, it will never be an
+interface type, meaning the type cannot be constrained in any way.
+
+this doesnt feel like a _great_ feature, but it will make building apis wayyyy
+nicer since that type is already known by the compiler. it doesnt make sense to
+make it yet another type parameter when it can be inferred by the compiler.
+while escape hatches are kinda annoying, this is the only one i've come across
+in this design, so i feel pretty fine about it.

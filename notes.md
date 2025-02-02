@@ -433,6 +433,20 @@ need a plain set of tokens, or actual values or whatever. that of course means
 that there are specific tokens that MUST match. so for example, we couldnt do
 that with `<` and `>` since those can be used for numeric comparisons.
 
+this means we could do something like this instead:
+
+```text
+const dsl = fn(tokens: []const #Token) #Expr {
+  // ...
+};
+
+const my_dsl = dsl(
+  <Widget with={properties}>
+    <Text>my input!</Text>
+  </Widget>
+);
+```
+
 ## type inference
 
 so one thing i am realizing is type inference is going to need to be a thing.
@@ -516,3 +530,18 @@ the only thing to think about is going to be it i want that. go gets around this
 by having special syntax for importing, which is scoped to the current file.
 maybe want that, but then maybe that means rethinking how everything is done at
 the top level?
+
+### Feb 2, 2025 - local visibility
+
+for this, i think a new local variable type should be done. so that means we
+have:
+
+- **`const`** - constant variable. this must be evaluable at compile time
+- **`let`** - variable. this is runtime evaluated and can optionally be mutable
+- **`local`** - local constant variable. same as `const` but can only be scoped
+  to the current file
+
+this fixes the import issue, where imports _need_ to be file-scoped. just add a
+new variable type and we're done. this has the additional benefit of allowing
+users to write file-local variables if they need to, for example, for submodule
+extraction.

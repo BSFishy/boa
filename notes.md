@@ -400,6 +400,39 @@ i think also allowing anything as a parameter and returning an expression should
 be pretty good. that should allow for more interesting dsls where the logic is
 still explicitly a function call.
 
+### Feb 1, 2025
+
+okay i should probably have the option to pass around plain tokens in addition
+to the expr and the string inputs. ill need to create some sort of pattern to
+enable this properly and fully, but i'm looking at something like this:
+
+```text
+const my_dsl = dsl()
+  .#meta(
+    <Widget with={properties}>
+      <Text>my input!</Text>
+    </Widget>
+  );
+```
+
+i dont know how much i like that, but that will enable custom parsing of inputs
+to enable markup expansion into proper code, like react :3. but now i must think
+of if i want that. ui implemented in markup is objectively ideal. but is this
+the right way to go about it? would it be better to have some sort of special
+string stuff going on? but then again i would like to be able to have kinda good
+error messages and parsing tokens directly from the lexer would be best for
+that.
+
+#### later - maybe no need for custom meta function?
+
+so i think, to be honest, it could use a phased parsing system, where we just
+make sure we match on openers and closers, like matching `(` and `)`. then we
+can parse out the top level, build a symbol table with functions, then start
+parsing out the smaller instructions, then we would know which function calls
+need a plain set of tokens, or actual values or whatever. that of course means
+that there are specific tokens that MUST match. so for example, we couldnt do
+that with `<` and `>` since those can be used for numeric comparisons.
+
 ## type inference
 
 so one thing i am realizing is type inference is going to need to be a thing.
@@ -435,3 +468,51 @@ nicer since that type is already known by the compiler. it doesnt make sense to
 make it yet another type parameter when it can be inferred by the compiler.
 while escape hatches are kinda annoying, this is the only one i've come across
 in this design, so i feel pretty fine about it.
+
+### Feb 1, 2025 - computed modules
+
+i have come back around on this. adding infer syntax is just plain wrong.
+metaprogrammed modules are the way to go. if im going to yank out the module for
+easier access anyway, i might as well compute the module at that point too.
+
+```text
+const array_list = fn(T: type) module {
+  return module {
+    pub const Type = struct {
+      .items = []T,
+    };
+
+    pub const append = fn(self: *Type, item: T) void {
+      // ...
+    };
+  };
+};
+```
+
+will need to figure out more of that syntax, but this is the way to implement
+it. i genuinely have no idea what i was thinking...
+
+## MODULES
+
+okay ngl, this is something i have been neglecting thinking about. the issue
+right now is that we should be using directory-level modules. BUTTT if we want
+everything super declarative, i.e. imports like `const core = #import("core");`,
+we need to play with visibilities. this is because imports _should_ be scoped to
+the file. that is how it should be. HOWEVER if every file imports the same
+library in a module, there are obviously going to be name collisions. we cant
+have one import for the entire module cuz it will be hard to track which file
+has it.
+
+okay so all these things together mean that we need to play with visibility
+within the module. that way, each file can import the module like above, but it
+wont collide across the entire module. so that means we need at least 3 levels
+of visibility:
+
+1. private - only visible to the current file
+1. module - only visible to the current module
+1. public - visible to outside the current module
+
+the only thing to think about is going to be it i want that. go gets around this
+by having special syntax for importing, which is scoped to the current file.
+maybe want that, but then maybe that means rethinking how everything is done at
+the top level?

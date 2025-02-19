@@ -24,8 +24,8 @@
     // internet connectivity.
     .dependencies = .{
         .lexer = .{
-            .url = "https://github.com/BSFishy/zig-lexer/archive/bedbbb7d83a4c1315dc48734666c3f77e10ae43a.zip",
-            .hash = "1220544be1d9eeaf191bca8ed9023977e99f0b19a7a7fdbf1e093eb066e219777559",
+            .url = "https://github.com/BSFishy/zig-lexer/archive/11cad39b8f5aedb1ff6996d3ea4f28448a7c09b6.zip",
+            .hash = "122050620a51ed58fbfe88174dc1d23041d424c564e86aec68c3206ab6b4161001a2",
         },
     },
     .paths = .{

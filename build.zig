@@ -58,6 +58,27 @@ pub fn build(b: *std.Build) void {
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
 
+    const tools_exe = b.addExecutable(.{
+        .name = "tools",
+        .root_source_file = b.path("src/tools.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    tools_exe.root_module.addImport("lexer", lexer.module("lexer"));
+    tools_exe.linkLibrary(lexer.artifact("lexer"));
+
+    b.installArtifact(tools_exe);
+
+    const tools_run_cmd = b.addRunArtifact(tools_exe);
+    tools_run_cmd.step.dependOn(b.getInstallStep());
+    if (b.args) |args| {
+        tools_run_cmd.addArgs(args);
+    }
+
+    const tools_run_step = b.step("tools", "Run the tools");
+    tools_run_step.dependOn(&tools_run_cmd.step);
+
     const exe_unit_tests = b.addTest(.{
         .root_source_file = b.path("src/boac.zig"),
         .target = target,

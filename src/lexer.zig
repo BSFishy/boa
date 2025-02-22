@@ -14,6 +14,7 @@ pub const Lexer = lexer.Lexer(.{
     .RParen = .{ .pattern = "\\)" },
     .Colon = .{ .pattern = ":" },
     .Comma = .{ .pattern = "," },
+    .Period = .{ .pattern = "." },
     .LBrace = .{ .pattern = "{" },
     .RBrace = .{ .pattern = "}" },
     .Semicolon = .{ .pattern = ";" },

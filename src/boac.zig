@@ -1,5 +1,6 @@
 const std = @import("std");
 const lexer = @import("lexer.zig");
+const parse = @import("parser.zig").parse;
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -14,19 +15,26 @@ pub fn main() !void {
     const code = try readUtf8(allocator, "examples/add.boa");
     defer allocator.free(code);
 
-    const tokens = lex(allocator, code) catch std.process.exit(1);
+    const tokens = try lex(allocator, code);
     defer allocator.free(tokens);
 
-    for (tokens) |token| {
-        std.debug.print("{s} - ", .{@tagName(token.token_type)});
+    for (tokens, 0..) |token, i| {
+        std.debug.print("{}: {s} - ", .{ i, @tagName(token.token_type) });
 
         for (token.source) |char| {
             var buffer: [4]u8 = undefined;
-            _ = try std.unicode.utf8Encode(char, &buffer);
-            std.debug.print("{s}", .{buffer});
+            const len = try std.unicode.utf8Encode(char, &buffer);
+            std.debug.print("{s}", .{buffer[0..len]});
         }
 
         std.debug.print("\n", .{});
+    }
+
+    const parser = try parse(allocator, tokens);
+    defer allocator.free(parser);
+    for (parser) |root| {
+        std.debug.print("{any}\n", .{root});
+        root.deinit();
     }
 }
 

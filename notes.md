@@ -545,3 +545,22 @@ this fixes the import issue, where imports _need_ to be file-scoped. just add a
 new variable type and we're done. this has the additional benefit of allowing
 users to write file-local variables if they need to, for example, for submodule
 extraction.
+
+### Feb 19, 2025 - import statement
+
+okay, thinking this more, the local visibility is horseshit. i now think that
+that is a super stupid idea and doesn't make sense for the usability of the
+language. it makes each file still feel like its own module except its not.
+import statements allow each file to feel like a small part of a larger module.
+
+i think the biggest thing here is probably the idea of making up your mind.
+warnings are stupid in a tool because its like pick a side. something is either
+an error or its not. you cant be like "well this is wrong but im not going to
+make you fix it". thats stupid and something that stupid people would do. NOT IN
+THIS PROJECT.
+
+so instead of not picking a side and making "package-private" vs "private", we
+only have one. so its either private to the module or public for everyone. there
+is no in between.
+
+still need to think about what the syntax should be

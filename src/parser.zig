@@ -271,7 +271,7 @@ const Parser = struct {
     }
 
     fn rollback(self: *Self) void {
-        self.i = self.stack.pop();
+        self.i = self.stack.pop() orelse unreachable;
     }
 
     fn parseRoot(self: *Self) !?Root {

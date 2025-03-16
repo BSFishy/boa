@@ -16,7 +16,7 @@ pub const Root = union(enum) {
 pub const Declaration = struct {
     const Self = @This();
 
-    visibility: Visibility,
+    exported: bool,
     type: VariableType,
     name: []const u21,
     expression: Expression,
@@ -24,12 +24,6 @@ pub const Declaration = struct {
     pub fn deinit(self: *const Self) void {
         self.expression.deinit();
     }
-};
-
-pub const Visibility = enum {
-    public,
-    private,
-    exported,
 };
 
 pub const VariableType = enum {
@@ -128,6 +122,12 @@ pub const Statement = union(enum) {
             .expression => |expression| expression.deinit(),
             .@"return" => |ret| ret.deinit(),
         }
+    }
+
+    pub fn hasSemicolon(self: Self) bool {
+        return switch (self) {
+            .declaration, .expression, .@"return" => true,
+        };
     }
 };
 
@@ -293,7 +293,7 @@ const Parser = struct {
         try self.enter();
         errdefer self.rollback();
 
-        const visibility: Visibility = if (self.optionalConsume(.Export)) |_| .exported else .private;
+        const exported = if (self.optionalConsume(.Export)) |_| true else false;
 
         const variable_type: VariableType = switch ((try self.oneOf(&.{.Const})).token_type) {
             .Const => .constant,
@@ -305,7 +305,7 @@ const Parser = struct {
         _ = try self.consume(.Semicolon);
 
         return .{
-            .visibility = visibility,
+            .exported = exported,
             .type = variable_type,
             .name = name,
             .expression = expression,
@@ -488,7 +488,9 @@ const Parser = struct {
             return error.invalidInput;
         };
 
-        _ = try self.consume(.Semicolon);
+        if (statement.hasSemicolon()) {
+            _ = try self.consume(.Semicolon);
+        }
 
         return statement;
     }

@@ -1,95 +1,101 @@
 const std = @import("std");
 
-// Although this function looks imperative, note that its job is to
-// declaratively construct a build graph that will be executed by an external
-// runner.
-pub fn build(b: *std.Build) void {
-    // Standard target options allows the person running `zig build` to choose
-    // what target to build for. Here we do not override the defaults, which
-    // means any target is allowed, and the default is native. Other options
-    // for restricting supported target set are available.
+const Build = *std.Build;
+const Target = std.Build.ResolvedTarget;
+const Optimize = std.builtin.OptimizeMode;
+const allocator = std.heap.page_allocator;
+
+const Context = struct {
+    target: Target,
+    optimize: Optimize,
+
+    tests: std.ArrayListUnmanaged(*std.Build.Step.Run) = .empty,
+
+    fn addTest(self: *Context, b: Build, module: *std.Build.Module) void {
+        const tests = b.addTest(.{
+            .root_module = module,
+        });
+
+        const run_tests = b.addRunArtifact(tests);
+        self.tests.append(allocator, run_tests) catch unreachable;
+    }
+
+    fn addTests(self: *const Context, b: Build) void {
+        const test_step = b.step("test", "Run tests");
+
+        for (self.tests.items) |test_run| {
+            test_step.dependOn(&test_run.step);
+        }
+    }
+};
+
+pub fn build(b: Build) void {
     const target = b.standardTargetOptions(.{});
-
-    // Standard optimization options allow the person running `zig build` to select
-    // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall. Here we do not
-    // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
+    var ctx: Context = .{ .target = target, .optimize = optimize };
 
-    const lexer = b.dependency("lexer", .{
-        .target = target,
-        .optimize = optimize,
+    // MODULES
+    const lexer = lexer_generator(b, &ctx);
+    boac_exe(b, &ctx, .{ .lexer = lexer });
+
+    // TESTS
+    ctx.addTests(b);
+}
+
+fn lexer_generator(b: Build, ctx: *Context) *std.Build.Module {
+    const lexer_gen = b.addExecutable(.{
+        .name = "lexer-gen",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/lexer-gen/main.zig"),
+            .target = ctx.target,
+            .optimize = ctx.optimize,
+        }),
     });
 
-    const exe = b.addExecutable(.{
-        .name = "boac",
-        .root_source_file = b.path("src/boac.zig"),
-        .target = target,
-        .optimize = optimize,
+    b.installArtifact(lexer_gen);
+    ctx.addTest(b, lexer_gen.root_module);
+
+    const run_lexer_gen = b.addRunArtifact(lexer_gen);
+    run_lexer_gen.addFileArg(b.path("src/boac/lexer.json"));
+    const lexer_path = run_lexer_gen.addOutputFileArg("lexer.zig");
+    run_lexer_gen.addArgs(&.{ "generate" });
+    const lexer = b.addModule("lexer", .{
+        .root_source_file = lexer_path,
+        .target = ctx.target,
     });
 
-    exe.root_module.addImport("lexer", lexer.module("lexer"));
-    exe.linkLibrary(lexer.artifact("lexer"));
-
-    // This declares intent for the executable to be installed into the
-    // standard location when the user invokes the "install" step (the default
-    // step when running `zig build`).
-    b.installArtifact(exe);
-
-    // This *creates* a Run step in the build graph, to be executed when another
-    // step is evaluated that depends on it. The next line below will establish
-    // such a dependency.
-    const run_cmd = b.addRunArtifact(exe);
-
-    // By making the run step depend on the install step, it will be run from the
-    // installation directory rather than directly from within the cache directory.
-    // This is not necessary, however, if the application depends on other installed
-    // files, this ensures they will be present and in the expected location.
+    const run_step = b.step("lexer-graph", "Generate a graphviz representing the lexer");
+    const run_cmd = b.addRunArtifact(lexer_gen);
+    run_cmd.addFileArg(b.path("src/boac/lexer.json"));
+    run_cmd.addArgs(&.{ "/dev/null", "graph" });
+    run_step.dependOn(&run_cmd.step);
     run_cmd.step.dependOn(b.getInstallStep());
 
-    // This allows the user to pass arguments to the application in the build
-    // command itself, like this: `zig build run -- arg1 arg2 etc`
+    return lexer;
+}
+
+fn boac_exe(b: Build, ctx: *Context, deps: struct { lexer: *std.Build.Module }) void {
+    const boac = b.addExecutable(.{
+        .name = "boac",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/boac/main.zig"),
+            .target = ctx.target,
+            .optimize = ctx.optimize,
+            .imports = &.{
+                .{ .name = "lexer", .module = deps.lexer },
+            },
+        }),
+    });
+
+    b.installArtifact(boac);
+    ctx.addTest(b, boac.root_module);
+
+    const run_step = b.step("run", "Run boac");
+    const run_cmd = b.addRunArtifact(boac);
+    run_step.dependOn(&run_cmd.step);
+    run_cmd.step.dependOn(b.getInstallStep());
+
     if (b.args) |args| {
         run_cmd.addArgs(args);
     }
-
-    // This creates a build step. It will be visible in the `zig build --help` menu,
-    // and can be selected like this: `zig build run`
-    // This will evaluate the `run` step rather than the default, which is "install".
-    const run_step = b.step("run", "Run the app");
-    run_step.dependOn(&run_cmd.step);
-
-    const tools_exe = b.addExecutable(.{
-        .name = "tools",
-        .root_source_file = b.path("src/tools.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-
-    tools_exe.root_module.addImport("lexer", lexer.module("lexer"));
-    tools_exe.linkLibrary(lexer.artifact("lexer"));
-
-    b.installArtifact(tools_exe);
-
-    const tools_run_cmd = b.addRunArtifact(tools_exe);
-    tools_run_cmd.step.dependOn(b.getInstallStep());
-    if (b.args) |args| {
-        tools_run_cmd.addArgs(args);
-    }
-
-    const tools_run_step = b.step("tools", "Run the tools");
-    tools_run_step.dependOn(&tools_run_cmd.step);
-
-    const exe_unit_tests = b.addTest(.{
-        .root_source_file = b.path("src/boac.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-
-    const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);
-
-    // Similar to creating the run step earlier, this exposes a `test` step to
-    // the `zig build --help` menu, providing a way for the user to request
-    // running the unit tests.
-    const test_step = b.step("test", "Run unit tests");
-    test_step.dependOn(&run_exe_unit_tests.step);
 }

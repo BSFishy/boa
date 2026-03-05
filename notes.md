@@ -222,6 +222,13 @@ to account for the smaller scope of certain modules, such as `core#array_list`.
 however, that is one single example, so maybe most other modules will be larger
 and need to span multiple files to feel nice to use.
 
+### 2026-03-04
+
+modules need to be scoped to a file. i made some more metaprogramming decisions
+and unfortunately they are incompatbible with scoping a module to a directory.
+the main one is module parameters, which will be really important for
+metaprogramming.
+
 ## struct field access
 
 so one thing to think about is how to do struct field access. there are a few
@@ -446,6 +453,148 @@ const my_dsl = dsl(
   </Widget>
 );
 ```
+
+### 2026-03-04
+
+so big update on metaprogramming. we have module parameters. this is a builtin
+function called in the root of a module. something like this:
+
+```text
+const core = #import("core");
+
+#parameters(T: #type);
+
+const Data = core#struct {
+  data: []const T,
+};
+
+const get = fn(self: *Data, index: usize) core#Option(T) {
+  if (index >= self#data.#len) {
+    return @none;
+  }
+
+  return @some(self#data[index]);
+};
+```
+
+something of this sort should be not only possible, but common. there are a few
+new things in here, so i'll try to go through them one at a time, if i can
+remember.
+
+the first new thing new is actually writing out the import statement. this is
+identical to defining any other variable. constant name equals some expression.
+this happens to be importing the core module with the `#import` function call.
+just a built in function that returns a module. this is something i need to
+ponder more. whether i need to differentiate between a module and a struct. i
+guess i inherently do because a struct is not a first class language feature.
+i'll get to that but i guess that solves that. a module is a first class
+language feature but a struct is not.
+
+next thing is the module parameter. this is just a function call at the root
+level. interestingly, this is a function that does not take a standard argument
+syntax. CORRECT! this is metaprogramming at play. when parsing, we pick up the
+callee expression and the function arguments. initially, we explicitly DO NOT
+parse the arguments. we just match parenthesis and keep going. when we're
+resolving the root level statements, we recognize that this function takes in a
+`#source` as input. this is a byte stream under the hood but signals to the
+compiler to just pass the raw bytes in the source code as the parameter.
+notably, `#source` must be the last argument. i think additionally here, for top
+level function calls like this we pass in the module as the first argument like
+it is a postfix call on the module itself. that should allow userland code to
+run at compile-time for a module to do something to it for even more
+metaprogramming.
+
+next up is the struct definition. this honestly deserves its own section but i
+want to stay going in order, so this is just gonna be a really long section.
+structs are no longer a language feature. instead, we have a mechanism to tell
+the compiler some memory layout and how to access that. this way, we can create
+our own system to define structs. want to lay it out in a different way? just
+write another function. a packed struct is just another function. more notably,
+other structures that are usually language features are also just functions.
+enums, unions, tagged unions, bitsets, etc. any way that we might address data
+is just a function telling the compiler what to do.
+
+a major point here is that that means we define much more about a type as well.
+by the way, `#type` is how we refer to this telling the compiler how to address
+data, its a type. so we not only define the addressing of data, we tell the
+compiler what to do when i try to path the type. if i have a variable, `value`,
+what happens when i type `value#field`? thats defined with the type. thats
+defined with the rest of the type. how about what happens when i try to write a
+switch statement on a value of that type? also defined with the type. any way
+that the type interacts with the language is defined in the userland function
+where i define the type.
+
+now, the struct function that defines the struct structure, as i have said 1
+million times, is userland code. this shall be in the core module because it is
+actually implemented in code but is very very common. this is where i am at an
+impasse. i feel like there should be another module that comes built in. if i
+have the builtin module and the core module, they are distinct. the builtin
+module is implemented in the compiler and the core module is implemented in code
+but just very common. the builtin module has no path prefix so is very quick to
+write, while the core module needs to be imported. i kinda want a module in the
+permutation matrix where it is implemented in code but is very quick to type.
+the struct would be an example of this. this is not really sort of a platform
+binding, so much as it is just common for the language. i just feel like adding
+this module makes things more complex than they should be. i put it in core for
+now and we'll see if i change my mind.
+
+i also considered the idea of having a "prelude" module that is added to the
+root path and defaults to this "common" module. this would most likely be
+through command line when invoking the compiler. the issue with this is it is
+horribly leaky. everyone ends up standardizing on the common module anyway and
+it ends up just being a point new users need to learn when learning the
+language. unnecessary complication.
+
+you might be saying "well if `core#struct` is just a function, why isnt it in
+the traditional function call syntax?" and to that i would say what an astute
+observation. we have updated the syntax. now, you may implement a function who
+has a `#block` as a parameter. in this case, the parser will pass in the block
+that it has parsed, as raw bytes, to the function. this is considered a regular
+function call. additionally, there is the case where there are no other
+arguments, or perhaps we are in a postfix call. in the situation where the
+argument list would be `()`, it may be omitted. this is considered a regular
+function call.
+
+next up is `core#Option`. i made a decision about the optional and result types.
+they are implemented in the language. since i now have better ability to express
+data and we have built in tagged unions (through metaprogramming), i dont think
+it's too crazy to implement these as regular core module types. i think we
+should also have shorthands for initializing types. for example, i would really
+love to be able to use a similar to the zig shorthand like `.{}` instead of
+`Type{}`. should also work with an identifier for the like enum case. i think we
+implement this as two functions in the `#type` definition that handle those
+cases? like theyre function calls that the compiler will call when it parses
+that out and says like "what does this mean?" i dont really know what it should
+look like, but i think that makes sense. and then we can make all sorts of weird
+and wacky types that can be initialized with both.
+
+i literally just had this idea as i was working through this. what if it is a
+constant on the type? like i can define some field on the type that is a
+constant. i guess it can be accessed with `@`. in this way, i can define all the
+enum variant values as constants on the type. for tagged unions, i define them
+as constant functions (or value for the none case) and then just access them
+like any other value. they can be expanded into the `Type@constant` syntax, but
+i think we'll likely generally use the shorthand syntax. additionally, we can
+use it for constants on structs, for example so i can define a constant `@empty`
+to initialize lists and the sort.
+
+after that, it's pretty bog standard stuff. the intention is that it is simple
+and minimal. the compiler does some heavy lifting (which if im honest, basically
+just means the parser is incremental) but i think this is the way. i also have
+stronger opinions about how we interact with the compiler. i think i call the
+compiler on a specific source file, which may import whatever modules it may
+pleases, then emits a .o file. i then link myself and all of that. i think i
+want to use ninja build to wire it all together. the build file should be easy
+to maintain.
+
+i think a lot of things are tied up by that decision of type definition. now
+that i think about it, we could even do a thing where module parameters are
+defined with a regular `core#parameters` function call and the compiler calls
+that in postfix notation with the `#module` as the first parameter. then we can
+just do shit with the `#module` in userland and its even more portable. need to
+think more about that. feels like it makes stuff like really extremely powerful
+dependency injection possible but also reinforces the desire for a prelude
+module.
 
 ## type inference
 

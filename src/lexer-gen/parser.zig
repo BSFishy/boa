@@ -6,6 +6,7 @@ pub const Node = union(enum) {
     char: u21,
     sequence: u21,
     group: [][]Node,
+    charlist: struct { list: []Node },
     quantifier: Quantifier,
 
     pub fn format(this: @This(), writer: *std.Io.Writer) std.Io.Writer.Error!void {
@@ -35,6 +36,9 @@ pub const Node = union(enum) {
                 }
 
                 try writer.print(" }}", .{});
+            },
+            .charlist => |charlist| {
+                try writer.print(".charlist = {any}", .{charlist});
             },
             .quantifier => |quant| {
                 try writer.print(".quantifier = {any}", .{quant});
@@ -75,6 +79,7 @@ pub fn parse(allocator: std.mem.Allocator, input: []const u8) ![]Node {
     var nodes: std.ArrayListUnmanaged(Node) = .empty;
     var groupPos: std.ArrayListUnmanaged(usize) = .empty;
     var splitPos: Queue(usize) = .empty;
+    var charlistStart: ?usize = null;
 
     var i: usize = 0;
     while (i < input.len) {
@@ -85,11 +90,24 @@ pub fn parse(allocator: std.mem.Allocator, input: []const u8) ![]Node {
             '\\' => {
                 i += 1;
                 const s = input[i];
-                if (s == '\\' ) {
-                    try nodes.append(allocator, .{ .char = '\\' });
-                } else {
-                    try nodes.append(allocator, .{ .sequence = s });
+                switch (s) {
+                    '\\', '[', ']', '(', '|', ')', '*' => {
+                        try nodes.append(allocator, .{ .char = s });
+                    },
+                    else => try nodes.append(allocator, .{ .sequence = s }),
                 }
+            },
+            '[' => {
+                if (charlistStart) |_| return error.invalidCharlist;
+                charlistStart = nodes.items.len;
+            },
+            ']' => {
+                const start = charlistStart orelse return error.invalidCharlist;
+                const charlist_nodes = try allocator.alloc(Node, nodes.items.len - start);
+                @memcpy(charlist_nodes, nodes.items[start..]);
+                try nodes.resize(allocator, start);
+                try nodes.append(allocator, .{ .charlist = .{ .list = charlist_nodes } });
+                charlistStart = null;
             },
             '(' => {
                 try groupPos.append(allocator, nodes.items.len);
@@ -98,6 +116,7 @@ pub fn parse(allocator: std.mem.Allocator, input: []const u8) ![]Node {
                 try splitPos.enqueue(allocator, nodes.items.len);
             },
             ')' => {
+                if (charlistStart) |_| return error.invalidCharlist;
                 const startPos = groupPos.pop() orelse return error.invalidGroup;
                 var group_nodes: std.ArrayListUnmanaged([]Node) = .empty;
                 var currentPos = startPos;

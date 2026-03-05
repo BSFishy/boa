@@ -195,6 +195,16 @@ pub fn insert(self: *Tree, allocator: std.mem.Allocator, tail: Tail, nodes: []co
         .group => |group| {
             self.concat(allocator, group, nodes[1..], tail);
         },
+        .charlist => |charlist| {
+            var group = allocator.alloc([]Parser.Node, charlist.list.len) catch unreachable;
+            for (charlist.list, 0..) |list, i| {
+                var node_list = allocator.alloc(Parser.Node, 1) catch unreachable;
+                node_list[0] = list;
+                group[i] = node_list;
+            }
+
+            self.concat(allocator, group, nodes[1..], tail);
+        },
         .quantifier => |quant| {
             self.quantifiers.append(allocator, .{ .quant = quant, .tail = tail, .left = nodes[1..], .expanded = false }) catch unreachable;
         },

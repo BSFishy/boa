@@ -27,11 +27,16 @@ pub fn main() !void {
         tree.insert(allocator, .{ .token = token.name }, nodes);
     }
 
+    if (std.mem.eql(u8, action, "graph-ir")) {
+        tree.dump(allocator);
+    }
+
     tree.expand(allocator);
     if (std.mem.eql(u8, action, "graph")) {
         tree.dump(allocator);
     } else if (std.mem.eql(u8, action, "generate")) {
         std.debug.print("i would generate some code here\n", .{});
+    } else if (std.mem.eql(u8, action, "graph-ir")) {
     } else {
         std.debug.panic("invalid action: {s}", .{action});
     }

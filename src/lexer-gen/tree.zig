@@ -25,6 +25,17 @@ const Tail = union(enum) {
         tree: *Tree,
     },
 
+    pub fn format(this: @This(), writer: *std.Io.Writer) std.Io.Writer.Error!void {
+        try writer.print(".{{ ", .{});
+
+        switch (this) {
+            .token => |token| try writer.print(".token = \"{s}\"", .{token}),
+            .subtree => |_| try writer.print(".subtree", .{}),
+        }
+
+        try writer.print(" }}", .{});
+    }
+
     fn defaultTree(self: Tail) ?*Tree {
         return switch (self) {
             .token => null,
@@ -128,12 +139,30 @@ fn getOrCreateSequence(self: *Tree, allocator: std.mem.Allocator, c: u21, tail: 
     return s;
 }
 
+fn concat(self: *Tree, allocator: std.mem.Allocator, base: []const []const Parser.Node, tail_nodes: []const Parser.Node, full_tail: Tail) void {
+    const subtree = allocator.create(Tree) catch unreachable;
+    subtree.* = .{};
+
+    var tails: Map(*Tree, void) = .empty;
+    tails.put(allocator, subtree, {}) catch unreachable;
+
+    const tail: Tail = .{ .subtree = .{ .tree = subtree, .tails = &tails } };
+
+    for (base) |nodes| {
+        self.insert(allocator, tail, nodes);
+    }
+
+    for (tails.keys()) |tail_tree| {
+        tail_tree.insert(allocator, full_tail, tail_nodes);
+    }
+}
+
 pub fn insert(self: *Tree, allocator: std.mem.Allocator, tail: Tail, nodes: []const Parser.Node) void {
     if (nodes.len == 0) {
         switch (tail) {
             .token => |tail_token| {
                 if (self.tail) |t| {
-                    std.debug.print("Not overriding tail {s} with {s} in insert\n", .{t, tail_token});
+                    std.debug.panic("Not overriding tail {s} with {s} in insert\n", .{t, tail_token});
                 } else {
                     self.tail = tail_token;
                 }
@@ -162,6 +191,9 @@ pub fn insert(self: *Tree, allocator: std.mem.Allocator, tail: Tail, nodes: []co
         .sequence => |c| {
             const s = self.getOrCreateSequence(allocator, c, tail_getter);
             s.insert(allocator, tail, nodes[1..]);
+        },
+        .group => |group| {
+            self.concat(allocator, group, nodes[1..], tail);
         },
         .quantifier => |quant| {
             self.quantifiers.append(allocator, .{ .quant = quant, .tail = tail, .left = nodes[1..], .expanded = false }) catch unreachable;
@@ -386,6 +418,10 @@ fn expandSequences(self: *Tree, allocator: std.mem.Allocator, expansion_iterator
 }
 
 fn copy(self: *Tree, allocator: std.mem.Allocator, other: *const Tree) void {
+    if (self == other) {
+        return;
+    }
+
     {
         var iterator = other.chars.iterator();
         while (iterator.next()) |entry| {
@@ -419,9 +455,10 @@ fn copy(self: *Tree, allocator: std.mem.Allocator, other: *const Tree) void {
         self.quantifiers.append(allocator, quant.copy()) catch unreachable;
     }
 
-    if (self.tail) |tail| {
-        if (other.tail) |other_tail| {
-            std.debug.print("Not copying tail {s} over {s}\n", .{other_tail, tail});
+    if (self.tail) |_| {
+        if (other.tail) |_| {
+            // Both have a tail, however we do not override, because unexpanded
+            // tails must take precedence over expanded tails
         }
     } else {
         if (other.tail) |tail| {

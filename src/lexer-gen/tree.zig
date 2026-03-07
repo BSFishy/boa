@@ -429,6 +429,10 @@ pub fn expand(self: *Tree, allocator: std.mem.Allocator) void {
                     tree.expandQuantifiers(allocator);
                 }
 
+                for (tree.sequences.values()) |subtree| {
+                    iterator.enqueue(allocator, .quantifier, subtree.tree);
+                }
+
                 iterator.enqueue(allocator, .sequence, tree);
             },
             .sequence => {
@@ -473,8 +477,11 @@ fn expandQuantifiers(self: *Tree, allocator: std.mem.Allocator) void {
         }
 
         if (q.isOne()) {
-            const subtree = allocator.create(Tree) catch unreachable;
-            subtree.* = .{};
+            const subtree = if (q.isMore()) self else blk: {
+                const subtree = allocator.create(Tree) catch unreachable;
+                subtree.* = .{};
+                break :blk subtree;
+            };
 
             var tails: Map(*Tree, void) = .empty;
 

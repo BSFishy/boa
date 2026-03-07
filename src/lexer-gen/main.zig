@@ -33,6 +33,10 @@ pub fn main() !void {
     }
 
     tree.expand(allocator);
+    if (tree.tail) |tail| {
+        std.debug.panic("zero length token detected: {s}\n", .{tail});
+    }
+
     if (std.mem.eql(u8, action, "graph")) {
         tree.dump(allocator);
     } else if (std.mem.eql(u8, action, "generate")) {

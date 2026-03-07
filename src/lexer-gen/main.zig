@@ -21,14 +21,15 @@ pub fn main() !void {
     const input = try input_file.readToEndAlloc(allocator, 2 * 1024 * 1024);
     const tokens: []Token = (try std.json.parseFromSlice(struct { tokens: []Token }, allocator, input, .{})).value.tokens;
 
-    var tree = Tree{};
+    var tree: Tree = .{};
     for (tokens) |token| {
         const nodes = try Parser.parse(allocator, token.pattern);
-        tree.insert(allocator, .{ .token = token.name }, nodes);
+        tree.insert(allocator, .{ .token = token.name }, nodes, false);
     }
 
     if (std.mem.eql(u8, action, "graph-ir")) {
         tree.dump(allocator);
+        return;
     }
 
     tree.expand(allocator);
@@ -36,7 +37,6 @@ pub fn main() !void {
         tree.dump(allocator);
     } else if (std.mem.eql(u8, action, "generate")) {
         std.debug.print("i would generate some code here\n", .{});
-    } else if (std.mem.eql(u8, action, "graph-ir")) {
     } else {
         std.debug.panic("invalid action: {s}", .{action});
     }

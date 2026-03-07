@@ -2,6 +2,6 @@
   "tokens": [
     { "name": "test", "pattern": "test" },
     { "name": "identifier", "pattern": "\\a\\A*" },
-    { "name": "test2", "pattern": "tero(na|mo)[ab]mo" }
+    { "name": "string", "pattern": "\"((^\")|\\\\(\"|(^\")))*\"" }
   ]
 }

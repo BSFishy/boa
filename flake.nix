@@ -17,6 +17,8 @@
             buildInputs = [
               pkgs.zig
               pkgs.zls
+              pkgs.lldb
+              pkgs.llvmPackages.lldbPlugins.llef
             ];
           };
         };

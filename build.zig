@@ -64,12 +64,23 @@ fn lexer_generator(b: Build, ctx: *Context) *std.Build.Module {
         .target = ctx.target,
     });
 
-    const run_step = b.step("lexer-graph", "Generate a graphviz representing the lexer");
-    const run_cmd = b.addRunArtifact(lexer_gen);
-    run_cmd.addFileArg(b.path("src/boac/lexer.json"));
-    run_cmd.addArgs(&.{ "/dev/null", "graph" });
-    run_step.dependOn(&run_cmd.step);
-    run_cmd.step.dependOn(b.getInstallStep());
+    {
+        const run_step = b.step("lexer-graph", "Generate a graphviz representing the lexer");
+        const run_cmd = b.addRunArtifact(lexer_gen);
+        run_cmd.addFileArg(b.path("src/boac/lexer.json"));
+        run_cmd.addArgs(&.{ "/dev/null", "graph" });
+        run_step.dependOn(&run_cmd.step);
+        run_cmd.step.dependOn(b.getInstallStep());
+    }
+
+    {
+        const run_step = b.step("lexer-graph-ir", "Generate a graphviz representing the unexpanded lexer");
+        const run_cmd = b.addRunArtifact(lexer_gen);
+        run_cmd.addFileArg(b.path("src/boac/lexer.json"));
+        run_cmd.addArgs(&.{ "/dev/null", "graph-ir" });
+        run_step.dependOn(&run_cmd.step);
+        run_cmd.step.dependOn(b.getInstallStep());
+    }
 
     return lexer;
 }

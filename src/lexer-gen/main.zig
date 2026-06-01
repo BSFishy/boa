@@ -7,18 +7,20 @@ const Token = struct {
     pattern: []u8,
 };
 
-pub fn main() !void {
-    const allocator = std.heap.page_allocator;
-    const args = try std.process.argsAlloc(allocator);
+pub fn main(init: std.process.Init) !void {
+    const allocator = init.arena.allocator();
+    const io = init.io;
+
+    const args = try init.minimal.args.toSlice(allocator);
     const input_path = args[1];
     const output_path = args[2];
     const action = args[3];
 
-    const input_file = try std.fs.openFileAbsolute(input_path, .{});
-    const output_file = try std.fs.createFileAbsolute(output_path, .{});
+    const cwd = std.Io.Dir.cwd();
+    const output_file = try cwd.createFile(io, output_path, .{});
     _ = output_file;
 
-    const input = try input_file.readToEndAlloc(allocator, 2 * 1024 * 1024);
+    const input = try cwd.readFileAlloc(io, input_path, allocator, .unlimited);
     const tokens: []Token = (try std.json.parseFromSlice(struct { tokens: []Token }, allocator, input, .{})).value.tokens;
 
     var tree: Tree = .{};

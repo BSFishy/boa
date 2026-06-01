@@ -32,7 +32,7 @@ const Tail = union(enum) {
 
         switch (this) {
             .token => |token| try writer.print(".token = \"{s}\"", .{token}),
-            .subtree => |_| try writer.print(".subtree", .{}),
+            .subtree => try writer.print(".subtree", .{}),
         }
 
         try writer.print(" }}", .{});
